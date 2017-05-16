@@ -37,6 +37,10 @@
 extern "C" {
 #endif
 
+#ifndef SENSOR_TILE
+#define SENSOR_TILE
+#endif
+
 typedef enum {
     PA_0  = 0x00,
     PA_1  = 0x01,
@@ -129,12 +133,18 @@ typedef enum {
     LED3        = PA_5,
     LED4        = PA_5,
     USER_BUTTON = PC_13,
-    // Standardized button names
-    BUTTON1 = USER_BUTTON,
+
+#ifdef SENSOR_TILE
+    SERIAL_TX = PC_12,
+    SERIAL_RX = PD_2,
+    USBTX = PC_12,
+    USBRX = PD_2,
+#else		
     SERIAL_TX   = PA_2,
     SERIAL_RX   = PA_3,
     USBTX       = PA_2,
     USBRX       = PA_3,
+#endif
     I2C_SCL     = PB_8,
     I2C_SDA     = PB_9,
     SPI_MOSI    = PA_7,

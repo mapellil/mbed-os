@@ -39,6 +39,10 @@
 #include "pinmap.h"
 #include "PeripheralPins.h"
 
+#ifndef SPI3W_SUPPORT
+#define SPI3W_SUPPORT
+#endif
+
 #if DEVICE_SPI_ASYNCH
     #define SPI_INST(obj)    ((SPI_TypeDef *)(obj->spi.spi))
 #else
@@ -73,8 +77,9 @@ void init_spi(spi_t *obj)
     if (HAL_SPI_Init(handle) != HAL_OK) {
         error("Cannot initialize SPI");
     }
-
+#ifndef SPI3W_SUPPORT
     __HAL_SPI_ENABLE(handle);
+#endif	
 }
 
 void spi_init(spi_t *obj, PinName mosi, PinName miso, PinName sclk, PinName ssel)
@@ -155,7 +160,15 @@ void spi_init(spi_t *obj, PinName mosi, PinName miso, PinName sclk, PinName ssel
     handle->Instance = SPI_INST(obj);
     handle->Init.Mode              = SPI_MODE_MASTER;
     handle->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+#ifdef SPI3W_SUPPORT		
+	  if (miso != NC) {
+       handle->Init.Direction         = SPI_DIRECTION_2LINES;
+	  } else {
+       handle->Init.Direction         = SPI_DIRECTION_1LINE;		
+	  }
+#else
     handle->Init.Direction         = SPI_DIRECTION_2LINES;
+#endif	
     handle->Init.CLKPhase          = SPI_PHASE_1EDGE;
     handle->Init.CLKPolarity       = SPI_POLARITY_LOW;
     handle->Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
@@ -349,17 +362,26 @@ static inline int ssp_busy(spi_t *obj)
 
 int spi_master_write(spi_t *obj, int value)
 {
-    uint16_t size, ret;
+    uint16_t size, rxret, txret;
     int Rx = 0;
     struct spi_s *spiobj = SPI_S(obj);
     SPI_HandleTypeDef *handle = &(spiobj->handle);
-
+    
+	  rxret = txret = HAL_OK;
     size = (handle->Init.DataSize == SPI_DATASIZE_16BIT) ? 2 : 1;
 
+#ifdef SPI3W_SUPPORT	
     /*  Use 10ms timeout */
-    ret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
+		if (handle->Init.Direction == SPI_DIRECTION_1LINE){
+	     txret = HAL_SPI_Transmit(handle, (uint8_t*)&value, size, 10);						
+		} else {
+       txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
+		}
+#else
+    txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
+#endif		
 
-    if(ret == HAL_OK) {
+    if(rxret == HAL_OK && txret == HAL_OK ) {
         return Rx;
     } else {
         DEBUG_PRINTF("SPI inst=0x%8X ERROR in write\r\n", (int)handle->Instance);
