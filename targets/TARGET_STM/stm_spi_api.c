@@ -373,9 +373,9 @@ int spi_master_write(spi_t *obj, int value)
 #ifdef SPI3W_SUPPORT	
     /*  Use 10ms timeout */
 		if (handle->Init.Direction == SPI_DIRECTION_1LINE){
-	     txret = HAL_SPI_Transmit(handle, (uint8_t*)&value, size, 10);						
+	       txret = HAL_SPI_Transmit(handle, (uint8_t*)&value, size, 10);						
 		} else {
-       txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
+           txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
 		}
 #else
     txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
@@ -394,11 +394,50 @@ int spi_slave_receive(spi_t *obj)
     return ((ssp_readable(obj) && !ssp_busy(obj)) ? 1 : 0);
 };
 
+#ifdef SPI3W_SUPPORT
+int spi_slave_read(spi_t *obj)
+{
+    SPI_TypeDef *spi = SPI_INST(obj);
+    struct spi_s *spiobj = SPI_S(obj);
+    SPI_HandleTypeDef *handle = &(spiobj->handle);	
+
+    if (handle->Init.Direction == SPI_DIRECTION_1LINE){
+       __HAL_SPI_DISABLE(handle);	
+       SPI_1LINE_RX(handle);	
+      __disable_irq();
+      __HAL_SPI_ENABLE(handle);
+  
+  /* In master RX mode the clock is automaticaly generated on the SPI enable.
+  So to guarantee the clock generation for only one data, the clock must be
+  disabled after the first bit and before the latest bit of the last Byte received */
+  /* __DSB instruction are inserted to garantee that clock is Disabled in the right timeframe */
+      __DSB();
+      __DSB();
+      __HAL_SPI_DISABLE(handle); 
+      __enable_irq();  
+    }
+
+    while (!ssp_readable(obj));
+	
+    if (handle->Init.DataSize == SPI_DATASIZE_8BIT) {
+        // Force 8-bit access to the data register
+        uint8_t *p_spi_dr = 0;
+        p_spi_dr = (uint8_t *) & (spi->DR);				
+		if (handle->Init.Direction == SPI_DIRECTION_1LINE) SPI_1LINE_TX(handle);   
+        return (int)(*p_spi_dr);
+    } else {
+		int tmp = (int)spi->DR;
+		if (handle->Init.Direction == SPI_DIRECTION_1LINE) SPI_1LINE_TX(handle);   		
+        return tmp;		
+    }
+}
+#else
 int spi_slave_read(spi_t *obj)
 {
     SPI_TypeDef *spi = SPI_INST(obj);
     struct spi_s *spiobj = SPI_S(obj);
     SPI_HandleTypeDef *handle = &(spiobj->handle);
+	
     while (!ssp_readable(obj));
     if (handle->Init.DataSize == SPI_DATASIZE_8BIT) {
         // Force 8-bit access to the data register
@@ -408,7 +447,8 @@ int spi_slave_read(spi_t *obj)
     } else {
         return (int)spi->DR;
     }
-}
+}	
+#endif
 
 void spi_slave_write(spi_t *obj, int value)
 {
