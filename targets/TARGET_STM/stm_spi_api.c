@@ -39,9 +39,6 @@
 #include "pinmap.h"
 #include "PeripheralPins.h"
 
-#ifndef SPI3W_SUPPORT
-#define SPI3W_SUPPORT
-#endif
 
 #if DEVICE_SPI_ASYNCH
     #define SPI_INST(obj)    ((SPI_TypeDef *)(obj->spi.spi))
@@ -77,9 +74,6 @@ void init_spi(spi_t *obj)
     if (HAL_SPI_Init(handle) != HAL_OK) {
         error("Cannot initialize SPI");
     }
-#ifndef SPI3W_SUPPORT
-    __HAL_SPI_ENABLE(handle);
-#endif	
 }
 
 void spi_init(spi_t *obj, PinName mosi, PinName miso, PinName sclk, PinName ssel)
@@ -160,15 +154,13 @@ void spi_init(spi_t *obj, PinName mosi, PinName miso, PinName sclk, PinName ssel
     handle->Instance = SPI_INST(obj);
     handle->Init.Mode              = SPI_MODE_MASTER;
     handle->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
-#ifdef SPI3W_SUPPORT		
+
 	  if (miso != NC) {
        handle->Init.Direction         = SPI_DIRECTION_2LINES;
 	  } else {
        handle->Init.Direction         = SPI_DIRECTION_1LINE;		
 	  }
-#else
-    handle->Init.Direction         = SPI_DIRECTION_2LINES;
-#endif	
+		
     handle->Init.CLKPhase          = SPI_PHASE_1EDGE;
     handle->Init.CLKPolarity       = SPI_POLARITY_LOW;
     handle->Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
@@ -362,26 +354,22 @@ static inline int ssp_busy(spi_t *obj)
 
 int spi_master_write(spi_t *obj, int value)
 {
-    uint16_t size, rxret, txret;
+    uint16_t size, ret;
     int Rx = 0;
     struct spi_s *spiobj = SPI_S(obj);
     SPI_HandleTypeDef *handle = &(spiobj->handle);
     
-	  rxret = txret = HAL_OK;
+	  ret = HAL_OK;
     size = (handle->Init.DataSize == SPI_DATASIZE_16BIT) ? 2 : 1;
 
-#ifdef SPI3W_SUPPORT	
     /*  Use 10ms timeout */
 		if (handle->Init.Direction == SPI_DIRECTION_1LINE){
-	       txret = HAL_SPI_Transmit(handle, (uint8_t*)&value, size, 10);						
+	      ret = HAL_SPI_Transmit(handle, (uint8_t*)&value, size, 10);						
 		} else {
-           txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
+        ret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
 		}
-#else
-    txret = rxret = HAL_SPI_TransmitReceive(handle,(uint8_t*)&value,(uint8_t*)&Rx,size,10);
-#endif		
 
-    if(rxret == HAL_OK && txret == HAL_OK ) {
+    if(ret == HAL_OK ) {
         return Rx;
     } else {
         DEBUG_PRINTF("SPI inst=0x%8X ERROR in write\r\n", (int)handle->Instance);
@@ -394,7 +382,6 @@ int spi_slave_receive(spi_t *obj)
     return ((ssp_readable(obj) && !ssp_busy(obj)) ? 1 : 0);
 };
 
-#ifdef SPI3W_SUPPORT
 int spi_slave_read(spi_t *obj)
 {
     SPI_TypeDef *spi = SPI_INST(obj);
@@ -410,9 +397,9 @@ int spi_slave_read(spi_t *obj)
   /* In master RX mode the clock is automaticaly generated on the SPI enable.
   So to guarantee the clock generation for only one data, the clock must be
   disabled after the first bit and before the latest bit of the last Byte received */
-  /* __DSB instruction are inserted to garantee that clock is Disabled in the right timeframe */
-      __DSB();
-      __DSB();
+  /* __DSB instruction could be inserted to garantee that clock is Disabled in the right timeframe */
+//      __DSB();
+//      __DSB();
       __HAL_SPI_DISABLE(handle); 
       __enable_irq();  
     }
@@ -431,24 +418,6 @@ int spi_slave_read(spi_t *obj)
         return tmp;		
     }
 }
-#else
-int spi_slave_read(spi_t *obj)
-{
-    SPI_TypeDef *spi = SPI_INST(obj);
-    struct spi_s *spiobj = SPI_S(obj);
-    SPI_HandleTypeDef *handle = &(spiobj->handle);
-	
-    while (!ssp_readable(obj));
-    if (handle->Init.DataSize == SPI_DATASIZE_8BIT) {
-        // Force 8-bit access to the data register
-        uint8_t *p_spi_dr = 0;
-        p_spi_dr = (uint8_t *) & (spi->DR);
-        return (int)(*p_spi_dr);
-    } else {
-        return (int)spi->DR;
-    }
-}	
-#endif
 
 void spi_slave_write(spi_t *obj, int value)
 {
