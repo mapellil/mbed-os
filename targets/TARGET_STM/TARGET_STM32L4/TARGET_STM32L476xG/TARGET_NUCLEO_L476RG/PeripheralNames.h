@@ -36,10 +36,6 @@
 extern "C" {
 #endif
 
-#ifndef SENSOR_TILE
-#define SENSOR_TILE
-#endif
-
 typedef enum {
     ADC_1 = (int)ADC1_BASE,
     ADC_2 = (int)ADC2_BASE,
@@ -59,15 +55,10 @@ typedef enum {
     LPUART_1 = (int)LPUART1_BASE
 } UARTName;
 
-//#ifdef SENSOR_TILE
-//#define STDIO_UART_TX  PC_12
-//#define STDIO_UART_RX  PD_2
-//#define STDIO_UART     UART_5
-//#else
+
 #define STDIO_UART_TX  PA_2
 #define STDIO_UART_RX  PA_3
 #define STDIO_UART     UART_2
-//#endif
 
 typedef enum {
     SPI_1 = (int)SPI1_BASE,
